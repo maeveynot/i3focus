@@ -1,0 +1,82 @@
+#!/usr/bin/python3
+
+import sys
+import json
+import asyncio
+import i3ipc.aio
+
+
+class i3Bifocals:
+    def __init__(self):
+        self.status = []
+        self.focused_name = None
+
+    def print_status(self):
+        block = {"full_text": self.focused_name or "(no window)"}
+        print("," + json.dumps([block, *self.status]), flush=True)
+
+    def handle_window_event(self, i3, e):
+        if e.container.focused:
+            self.focused_name = e.container.name
+            self.print_status()
+
+    async def main(self, argv):
+        i3 = await i3ipc.aio.Connection().connect()
+
+        i3.on(i3ipc.Event.WINDOW_FOCUS, self.handle_window_event)
+        i3.on(i3ipc.Event.WINDOW_TITLE, self.handle_window_event)
+
+        tree = await i3.get_tree()
+        self.focused_name = tree.find_focused().name
+
+        i3status = await asyncio.create_subprocess_shell(*argv, stdout=asyncio.subprocess.PIPE)
+
+        # our input must start with two very specific things (see:
+        # https://i3wm.org/docs/i3bar-protocol.html). this could use
+        # some nice error handling instead of bailing with an assert.
+
+        header = json.loads(await i3status.stdout.readline())
+        assert header["version"] == 1
+        print(json.dumps(header))
+        array_start = await i3status.stdout.read(1)
+        assert array_start == b"["
+        print("[")
+
+        # use the empty array trick so that we don't have to keep state
+        # and can just start all subsequent lines with a comma.
+
+        print("[]")
+
+        # for this we're cheaping out and stripping instead of using a
+        # real streaming parser. note that on the first iteration here,
+        # we've only read the opening bracket, so it's possible (and
+        # very likely, since it's what i3status does) although not
+        # required by the spec that the rest of the line is empty; don't
+        # try to parse any JSON in that case.
+        #
+        # this could be extended to keep a buffer and append to it until
+        # we get a whole status line array that we can parse as a JSON
+        # value, for implementations that include newlines in their
+        # output (i don't think there are any given that the *de facto*
+        # spec as consumed by a million little scripts like this one
+        # seems to be one status line array per line. just, technically,
+        # it's valid and we ought to properly handle it someday).
+        #
+        # fun fact: i originally wrote this with JSONStreamer in anger!
+        # then i calmed down, read the spec again, and decided this
+        # would be more illuminating if i dropped that baggage and did
+        # things the easy way like a normal person, since the point of
+        # this script is demonstrating the use of async IPC, not how we
+        # sling the JSON.
+
+        while i3status.returncode is None:
+            line_bytes = await i3status.stdout.readline()
+            line = line_bytes.decode("utf-8").strip(",\n")
+            if line:
+                self.status = json.loads(line)
+                self.print_status()
+
+
+if __name__ == "__main__":
+    i3status_argv = sys.argv[1:] or ["i3status"]
+    asyncio.run(i3Bifocals().main(i3status_argv))
