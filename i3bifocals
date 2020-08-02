@@ -29,7 +29,7 @@ class i3Bifocals:
         tree = await i3.get_tree()
         self.focused_name = tree.find_focused().name
 
-        i3status = await asyncio.create_subprocess_shell(*argv, stdout=asyncio.subprocess.PIPE)
+        i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
 
         # our input must start with two very specific things (see:
         # https://i3wm.org/docs/i3bar-protocol.html). this could use
