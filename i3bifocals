@@ -5,7 +5,6 @@ import json
 import asyncio
 from i3ipc.aio import Connection
 from i3ipc import Event
-from functools import partial
 
 
 class i3Bifocals:
@@ -20,19 +19,25 @@ class i3Bifocals:
         }
         print("," + json.dumps([block, *self.status]), flush=True)
 
-    def handle_event(self, t, i3, e):
-        if t == Event.WINDOW_FOCUS or t == Event.WINDOW_TITLE and e.container.focused:
-            self.focused_name = e.container.name
+    def handle_workspace_event(self, i3, event):
+        if event.current.find_focused() is None:
+            self.focused_name = None
             self.print_status()
-        elif t == Event.WINDOW_CLOSE or t == Event.WORKSPACE_FOCUS and e.current.find_focused() is None:
+
+    def handle_window_event(self, i3, event):
+        if event.change == "focus" or event.change == "title" and event.container.focused:
+            self.focused_name = event.container.name
+            self.print_status()
+        elif event.change == "close":
             self.focused_name = None
             self.print_status()
 
     async def main(self, argv):
         i3 = await Connection().connect()
 
-        for t in (Event.WINDOW_FOCUS, Event.WINDOW_TITLE, Event.WINDOW_CLOSE, Event.WORKSPACE_FOCUS):
-            i3.on(t, partial(self.handle_event, t))
+        i3.on(Event.WORKSPACE_FOCUS, self.handle_workspace_event)
+        for event_type in (Event.WINDOW_FOCUS, Event.WINDOW_TITLE, Event.WINDOW_CLOSE):
+            i3.on(event_type, self.handle_window_event)
 
         tree = await i3.get_tree()
         self.focused_name = tree.find_focused().name
