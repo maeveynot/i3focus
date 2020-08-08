@@ -47,8 +47,8 @@ class i3Bifocals:
     async def exec_i3status(self, argv):
         i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
 
-        # our input and output must start with two very specific things (see:
-        # https://i3wm.org/docs/i3bar-protocol.html).
+        # our input and output must start with two very specific things
+        # (see: https://i3wm.org/docs/i3bar-protocol.html).
 
         print(json.dumps({"version": 1}))
         print("[")
@@ -70,34 +70,22 @@ class i3Bifocals:
             print("did not read a body from i3status! exiting.", file=sys.stderr)
             sys.exit(1)
 
-        # for this we're cheaping out and stripping instead of using a
-        # real streaming parser. note that on the first iteration here,
-        # we've only read the opening bracket, so it's possible (and
-        # very likely, since it's what i3status does) although not
-        # required by the spec that the rest of the line is empty; don't
-        # try to parse any JSON in that case.
-        #
-        # this could be extended to keep a buffer and append to it until
-        # we get a whole status line array that we can parse as a JSON
-        # value, for implementations that include newlines in their
-        # output (i don't think there are any given that the *de facto*
-        # spec as consumed by a million little scripts like this one
-        # seems to be one status line array per line. just, technically,
-        # it's valid and we ought to properly handle it someday).
-        #
-        # fun fact: i originally wrote this with JSONStreamer in anger!
-        # then i calmed down, read the spec again, and decided this
-        # would be more illuminating if i dropped that baggage and did
-        # things the easy way like a normal person, since the point of
-        # this script is demonstrating the use of async IPC, not how we
-        # sling the JSON.
+        # read until we have a full array (which we know ends with a
+        # close bracket). it is very unlikely we'll need to do multiple
+        # reads between clearing the buffer, since i3status prints one
+        # array per line, but if some other compatible program outputs
+        # pretty-printed JSON it's possible.
 
+        buf = bytearray()
         while i3status.returncode is None:
-            line_bytes = await i3status.stdout.readline()
-            line = line_bytes.decode("utf-8").strip(",\n")
-            if line:
-                self.status = json.loads(line)
+            buf += await i3status.stdout.readuntil(b"]")
+            try:
+                s = buf.decode("utf-8").strip("\n,")
+                self.status = json.loads(s)
                 self.print_status()
+                buf.clear()
+            except json.decoder.JSONDecodeError:
+                pass
 
 
 async def main():
