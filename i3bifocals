@@ -96,4 +96,7 @@ class i3Bifocals:
 
 if __name__ == "__main__":
     i3status_argv = sys.argv[1:] or ["i3status"]
-    asyncio.run(i3Bifocals().main(i3status_argv))
+    try:
+        asyncio.run(i3Bifocals().main(i3status_argv))
+    except (KeyboardInterrupt, SystemExit):
+        sys.exit(0)
