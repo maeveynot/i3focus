@@ -13,11 +13,9 @@ class i3Bifocals:
         self.focused_name = None
 
     def print_status(self):
-        block = {
-            "name": "focused_window",
-            "full_text": self.focused_name or "-",
-        }
-        print("," + json.dumps([block, *self.status]), flush=True)
+        focus_block = {"name": "focused_con", "full_text": self.focused_name or "-"}
+        blocks = [focus_block, *self.status]
+        print(json.dumps(blocks) + ",", flush=True)
 
     def handle_workspace_event(self, i3, event):
         if event.current.find_focused() is None:
@@ -70,11 +68,6 @@ class i3Bifocals:
         if array_start != b"[":
             print("did not read a body from i3status! exiting.", file=sys.stderr)
             sys.exit(1)
-
-        # use the empty array trick so that we don't have to keep state
-        # and can just start all subsequent lines with a comma.
-
-        print("[]")
 
         # for this we're cheaping out and stripping instead of using a
         # real streaming parser. note that on the first iteration here,
