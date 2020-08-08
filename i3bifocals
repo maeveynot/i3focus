@@ -30,7 +30,7 @@ class i3Bifocals:
             self.focused_name = None
             self.print_status()
 
-    async def main(self, argv):
+    async def subscribe_i3_events(self):
         i3 = await Connection().connect()
 
         i3.on(Event.WORKSPACE_FOCUS, self.handle_workspace_event)
@@ -44,6 +44,7 @@ class i3Bifocals:
         else:
             self.focused_name = None
 
+    async def exec_i3status(self, argv):
         i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
 
         # our input and output must start with two very specific things (see:
@@ -99,9 +100,14 @@ class i3Bifocals:
                 self.print_status()
 
 
-if __name__ == "__main__":
+async def main():
     i3status_argv = sys.argv[1:] or ["i3status"]
+    focus = i3Bifocals()
+    tasks = await asyncio.gather(focus.subscribe_i3_events(), focus.exec_i3status(i3status_argv))
+
+
+if __name__ == "__main__":
     try:
-        asyncio.run(i3Bifocals().main(i3status_argv))
+        asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         sys.exit(0)
