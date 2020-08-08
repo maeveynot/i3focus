@@ -48,16 +48,28 @@ class i3Bifocals:
 
         i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
 
-        # our input must start with two very specific things (see:
-        # https://i3wm.org/docs/i3bar-protocol.html). this could use
-        # some nice error handling instead of bailing with an assert.
+        # our input and output must start with two very specific things (see:
+        # https://i3wm.org/docs/i3bar-protocol.html).
 
-        header = json.loads(await i3status.stdout.readline())
-        assert header["version"] == 1
-        print(json.dumps(header))
-        array_start = await i3status.stdout.read(1)
-        assert array_start == b"["
+        print(json.dumps({"version": 1}))
         print("[")
+
+        # verify that i3status sent the same header to us.
+
+        try:
+            header = json.loads(await i3status.stdout.readline())
+            assert header["version"] == 1
+        except (json.decoder.JSONDecodeError, ValueError):
+            print("could not parse JSON header from i3status! exiting.", file=sys.stderr)
+            sys.exit(1)
+        except AssertionError:
+            print("got an unknown i3bar protocol version! exiting.", file=sys.stderr)
+            sys.exit(1)
+
+        array_start = await i3status.stdout.read(1)
+        if array_start != b"[":
+            print("did not read a body from i3status! exiting.", file=sys.stderr)
+            sys.exit(1)
 
         # use the empty array trick so that we don't have to keep state
         # and can just start all subsequent lines with a comma.
