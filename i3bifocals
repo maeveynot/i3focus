@@ -10,44 +10,33 @@ from i3ipc import Event
 class i3Bifocals:
     def __init__(self):
         self.status = []
-        self.focused = None
 
-    def print_status(self):
+    async def print_status(self):
+        tree = await self.i3.get_tree()
+        focused = tree.find_focused()
         focus_block = {
             "name": "focused_con",
-            "full_text": self.focused.name if self.focused else "-",
+            "full_text": "-" if focused.type == "workspace" else focused.name,
         }
         blocks = [focus_block, *self.status]
         print(json.dumps(blocks) + ",", flush=True)
 
-    def handle_workspace_event(self, i3, event):
+    async def handle_workspace_event(self, i3, event):
         if event.current.find_focused() is None:
-            self.focused = None
-            self.print_status()
+            await self.print_status()
 
-    def handle_window_event(self, i3, event):
+    async def handle_window_event(self, i3, event):
         change = event.change
         con = event.container
-        if change == "focus" or con.focused and change == "title":
-            self.focused = con
-            self.print_status()
-        elif change == "close":
-            self.focused = None
-            self.print_status()
+        if change == "focus" or change == "close" or con.focused and change == "title":
+            await self.print_status()
 
     async def subscribe_i3_events(self):
-        i3 = await Connection().connect()
+        self.i3 = await Connection().connect()
 
-        i3.on(Event.WORKSPACE_FOCUS, self.handle_workspace_event)
+        self.i3.on(Event.WORKSPACE_FOCUS, self.handle_workspace_event)
         for event_type in (Event.WINDOW_FOCUS, Event.WINDOW_TITLE, Event.WINDOW_CLOSE):
-            i3.on(event_type, self.handle_window_event)
-
-        tree = await i3.get_tree()
-        focused = tree.find_focused()
-        if focused.type == "con":
-            self.focused = focused
-        else:
-            self.focused = None
+            self.i3.on(event_type, self.handle_window_event)
 
     async def exec_i3status(self, argv):
         i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
@@ -87,7 +76,7 @@ class i3Bifocals:
             try:
                 s = buf.decode("utf-8").strip("\n,")
                 self.status = json.loads(s)
-                self.print_status()
+                await self.print_status()
                 buf.clear()
             except json.decoder.JSONDecodeError:
                 pass
