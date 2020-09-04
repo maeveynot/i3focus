@@ -45,6 +45,11 @@ class i3Bifocals:
         blocks = [focus_block, *self.status]
         print(json.dumps(blocks) + ",", flush=True)
 
+    async def handle_binding_event(self, i3, event):
+        cmd = event.binding.command.split()
+        if cmd[0] in ("split", "layout"):
+            await self.print_status()
+
     async def handle_workspace_event(self, i3, event):
         if event.current.find_focused() is None:
             await self.print_status()
@@ -58,6 +63,11 @@ class i3Bifocals:
     async def subscribe_i3_events(self):
         self.i3 = await Connection().connect()
 
+        # unfortunately, if layout is modified by something other than a
+        # binding, we will not be notified, and will not know until
+        # another event or the next i3status tick. perhaps a "layout"
+        # event type could be added to the IPC spec.
+        self.i3.on(Event.BINDING, self.handle_binding_event)
         self.i3.on(Event.WORKSPACE_FOCUS, self.handle_workspace_event)
         for event_type in (Event.WINDOW_FOCUS, Event.WINDOW_TITLE, Event.WINDOW_CLOSE):
             self.i3.on(event_type, self.handle_window_event)
