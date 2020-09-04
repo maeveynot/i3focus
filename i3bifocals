@@ -10,24 +10,29 @@ from i3ipc import Event
 class i3Bifocals:
     def __init__(self):
         self.status = []
-        self.focused_name = None
+        self.focused = None
 
     def print_status(self):
-        focus_block = {"name": "focused_con", "full_text": self.focused_name or "-"}
+        focus_block = {
+            "name": "focused_con",
+            "full_text": self.focused.name if self.focused else "-",
+        }
         blocks = [focus_block, *self.status]
         print(json.dumps(blocks) + ",", flush=True)
 
     def handle_workspace_event(self, i3, event):
         if event.current.find_focused() is None:
-            self.focused_name = None
+            self.focused = None
             self.print_status()
 
     def handle_window_event(self, i3, event):
-        if event.change == "focus" or event.change == "title" and event.container.focused:
-            self.focused_name = event.container.name
+        change = event.change
+        con = event.container
+        if change == "focus" or con.focused and change == "title":
+            self.focused = con
             self.print_status()
-        elif event.change == "close":
-            self.focused_name = None
+        elif change == "close":
+            self.focused = None
             self.print_status()
 
     async def subscribe_i3_events(self):
@@ -40,9 +45,9 @@ class i3Bifocals:
         tree = await i3.get_tree()
         focused = tree.find_focused()
         if focused.type == "con":
-            self.focused_name = focused.name
+            self.focused = focused
         else:
-            self.focused_name = None
+            self.focused = None
 
     async def exec_i3status(self, argv):
         i3status = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE)
