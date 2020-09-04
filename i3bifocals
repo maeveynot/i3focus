@@ -7,6 +7,30 @@ from i3ipc.aio import Connection
 from i3ipc import Event
 
 
+LAYOUTS = {
+    "splith": "H",
+    "splitv": "V",
+    "tabbed": "T",
+    "stacked": "S",
+}
+
+def con_path(con):
+    if con is None or con.type == "workspace":
+        return []
+    else:
+        return con_path(con.parent) + [LAYOUTS.get(con.layout, "?") if con.nodes else con.name]
+
+def con_name_with_path(con):
+    if con.type == "workspace":
+        return f"<workspace {con.name}>"
+    else:
+        *path, leaf = con_path(con)
+        if path:
+            return f"{'/'.join(path)}: {leaf}"
+        else:
+            return leaf
+
+
 class i3Bifocals:
     def __init__(self):
         self.status = []
@@ -16,7 +40,7 @@ class i3Bifocals:
         focused = tree.find_focused()
         focus_block = {
             "name": "focused_con",
-            "full_text": "-" if focused.type == "workspace" else focused.name,
+            "full_text": con_name_with_path(focused),
         }
         blocks = [focus_block, *self.status]
         print(json.dumps(blocks) + ",", flush=True)
